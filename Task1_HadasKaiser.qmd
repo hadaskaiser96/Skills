@@ -1,0 +1,100 @@
+---
+title: "SQL_assigment_HadasKaiser"
+format: html
+editor: visual
+---
+
+## Setting up DB
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(dbplyr)
+
+con_chocolate <- dbConnect(RSQLite::SQLite(), dbname = "chocolate.sqlite")
+
+tables <- dbListTables(con_chocolate)
+print(tables)
+
+# Extract each table as a df
+customers_df <- dbGetQuery(con_chocolate, "SELECT * FROM customers")
+orders_df <- dbGetQuery(con_chocolate, "SELECT * FROM orders")
+products_df <- dbGetQuery(con_chocolate, "SELECT * FROM products")
+salesreps_df <- dbGetQuery(con_chocolate, "SELECT * FROM salesreps")
+```
+
+## Q1
+
+1.  Assuming you got it right - what did your boss want? Explain the query.
+2.  Run the query - what is the answer?
+
+```{r}
+Q1 <- dbGetQuery(con_chocolate, "
+SELECT salesreps.Name, SUM(orders.amount) AS total_candy_bars_sold
+FROM salesreps INNER JOIN orders USING (srid)
+WHERE
+orders.sale_date BETWEEN '2022-01-01' AND '2022-12-31'
+AND salesreps.year_joined = 2010
+GROUP BY salesreps.Name
+")
+```
+
+**Explaining the query:** The following query identifies the number of candy bars sold in 2022 by sales representatives who joined the company in 2010.
+
+The query's results is the following table:
+
+| Name                | Total candy bar sold |
+|---------------------|----------------------|
+| Tootle, Naudia      | 1825                 |
+| al-Farrah, Ghaaliba | 1866                 |
+| al-Sadri, Saamyya   | 1784                 |
+
+## Q2
+
+Generate a frequency table of the number of times a customer made an order. It should have two columns: 1. total_orders - the number of orders made by a customer.\
+2. N - the number of customers that made total_orders orders.
+
+```{r}
+Q2 <- dbGetQuery(con_chocolate, "
+    select total_orders, count(cid) as N
+    from
+    (
+    SELECT cid, count(cid) as total_orders
+    FROM orders
+    GROUP BY cid
+    order by count(cid)
+    )
+    group by 1
+")
+```
+
+## Q3
+
+In a single query:
+
+• Identify the candy bar with the highest number of total orders in the first quarter of 2022.
+
+• What is the name of the sales rep that sold the most of those candy bars in the second quarter of 2022?
+
+```{r}
+Q3 <- dbGetQuery(con_chocolate, "
+      select name from
+      (select o.srid,name, sum (o.amount) as total_orders
+      from orders o
+      left join salesreps s 
+      on o.srid = s.srid
+          where o.sale_date between '2022-04-01' and '2022-06-31' #seconf q
+          and pid =     (select pid from (
+                          select o.pid, p.candy_names, sum (o.amount) as total_orders
+                          from orders o
+                          left join products p
+                          on p.pid = o.pid
+                          where o.sale_date between '2022-01-01' and '2022-03-31' #first q
+                          group by o.pid
+                          limit 1) #subquery of the first part of the question
+                           )
+
+        order by 3 desc
+        limit 1)
+")
+```
