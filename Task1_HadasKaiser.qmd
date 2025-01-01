@@ -78,23 +78,31 @@ In a single query:
 
 ```{r}
 Q3 <- dbGetQuery(con_chocolate, "
-      select name from
-      (select o.srid,name, sum (o.amount) as total_orders
-      from orders o
-      left join salesreps s 
-      on o.srid = s.srid
-          where o.sale_date between '2022-04-01' and '2022-06-31' #seconf q
-          and pid =     (select pid from (
-                          select o.pid, p.candy_names, sum (o.amount) as total_orders
-                          from orders o
-                          left join products p
-                          on p.pid = o.pid
-                          where o.sale_date between '2022-01-01' and '2022-03-31' #first q
-                          group by o.pid
-                          limit 1) #subquery of the first part of the question
-                           )
+with FirstQ AS (
+    select pid,sum(amount) as total_orders
+    FROM orders
+    where sale_date between '2022-01-01' and '2022-03-31'
+    group by 1
+    order by 2 desc
+    limit 1
+),
+SecondQ AS (
+    select srid, pid, sum (amount) as total_sold
+    from orders
+    where sale_date between '2022-04-01' and '2022-06-30'
+    group by 1,2
+),
+TopSales AS (
+    select sq.srid, sq.total_sold
+    from SecondQ as sq
+    left join FirstQ as fq on fq.pid = sq.pid
+    order by 2 desc
+    limit 1
+)
 
-        order by 3 desc
-        limit 1)
+select sr.name
+from TopSales ts
+left join salesreps sr
+on sr.srid = ts.srid
 ")
 ```
